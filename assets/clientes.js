@@ -1,27 +1,32 @@
 document.addEventListener('DOMContentLoaded', function () {
     const tablaClientes = document.getElementById('tabla-clientes');
-    const modalEditarCliente = new bootstrap.Modal(document.getElementById('modalEditarCliente'));
+    const modalEditarClienteElement = document.getElementById('modalEditarCliente');
+    const modalEditarCliente = new bootstrap.Modal(modalEditarClienteElement);
     const btnGuardarCambios = document.getElementById('btn-guardar-cambios-cliente');
     const historialContainer = document.getElementById('historial-cliente-container');
     const historialContenido = document.getElementById('historial-contenido');
 
-    // Usar delegación de eventos en la tabla
+    // --- MANEJO DE EVENTOS EN LA TABLA ---
     tablaClientes.addEventListener('click', function (e) {
         const editButton = e.target.closest('.btn-edit');
         const tableRow = e.target.closest('tr');
 
         if (editButton) {
-            e.stopPropagation(); // Evita que el clic se propague a la fila <tr>
+            e.stopPropagation(); 
+            
+            // Leemos todos los datos del botón, incluyendo 'data-origen'
             const id = editButton.dataset.id;
             const dni = editButton.dataset.dni;
             const nombre = editButton.dataset.nombre;
             const telefono = editButton.dataset.telefono;
+            const origen = editButton.dataset.origen;
 
-            // Rellenar el modal de edición
-            document.getElementById('edit-cliente-id').value = id;
-            document.getElementById('edit-cliente-dni').value = dni;
-            document.getElementById('edit-cliente-nombre').value = nombre;
-            document.getElementById('edit-cliente-telefono').value = telefono;
+            // Rellenamos todos los campos del modal
+            modalEditarClienteElement.querySelector('#edit-cliente-id').value = id;
+            modalEditarClienteElement.querySelector('#edit-cliente-dni').value = dni;
+            modalEditarClienteElement.querySelector('#edit-cliente-nombre').value = nombre;
+            modalEditarClienteElement.querySelector('#edit-cliente-telefono').value = telefono;
+            modalEditarClienteElement.querySelector('#edit-cliente-origen').value = origen;
             
             modalEditarCliente.show();
         } else if (tableRow) {
@@ -31,31 +36,38 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Lógica para guardar los cambios del cliente
+    // --- LÓGICA PARA GUARDAR LOS CAMBIOS DEL CLIENTE (CORREGIDA) ---
     btnGuardarCambios.addEventListener('click', function () {
-        const id = document.getElementById('edit-cliente-id').value;
-        const nombre = document.getElementById('edit-cliente-nombre').value;
-        const telefono = document.getElementById('edit-cliente-telefono').value;
+        // Recolectamos TODOS los datos del formulario, incluyendo el 'origen'
+        const id = modalEditarClienteElement.querySelector('#edit-cliente-id').value;
+        const nombre = modalEditarClienteElement.querySelector('#edit-cliente-nombre').value;
+        const telefono = modalEditarClienteElement.querySelector('#edit-cliente-telefono').value;
+        const origen = modalEditarClienteElement.querySelector('#edit-cliente-origen').value;
 
+        // Enviamos el objeto completo al backend, incluyendo la clave 'origen'
         fetch('api/update_cliente.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, nombre, telefono })
+            body: JSON.stringify({ id, nombre, telefono, origen }) // <-- 'origen' se incluye aquí
         })
         .then(response => response.json())
         .then(data => {
             if (data.status === 'success' || data.status === 'info') {
                 alert(data.message);
                 modalEditarCliente.hide();
-                // Actualizar la fila en la tabla sin recargar la página
+                // Actualizamos la fila en la tabla sin recargar la página
                 const rowToUpdate = tablaClientes.querySelector(`tr[data-cliente-id='${id}']`);
                 if(rowToUpdate) {
+                    // Actualizamos el texto de TODAS las celdas relevantes
                     rowToUpdate.cells[1].textContent = nombre;
                     rowToUpdate.cells[2].textContent = telefono || 'N/A';
-                    // También actualizar los data-attributes del botón
+                    rowToUpdate.cells[3].textContent = origen || 'N/A'; // <-- Se actualiza la celda 'Origen'
+
+                    // También actualizamos los data-attributes del botón para futuras ediciones
                     const button = rowToUpdate.querySelector('.btn-edit');
                     button.dataset.nombre = nombre;
                     button.dataset.telefono = telefono;
+                    button.dataset.origen = origen; // <-- Se actualiza el 'data-origen' del botón
                 }
             } else {
                 throw new Error(data.message);
@@ -64,7 +76,8 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch(error => alert('Error: ' + error.message));
     });
 
-    // Función para mostrar el historial del cliente
+    // --- FUNCIÓN PARA MOSTRAR EL HISTORIAL DEL CLIENTE ---
+    // Esta función se mantiene exactamente como en tu versión original.
     function mostrarHistorial(clienteId, clienteNombre) {
         document.getElementById('historial-nombre-cliente').textContent = clienteNombre;
         historialContenido.innerHTML = '<div class="col-12 text-center"><i class="fas fa-spinner fa-spin fa-3x"></i></div>';

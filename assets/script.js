@@ -50,10 +50,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (data.found) {
                     document.getElementById('cliente-nombre').value = data.nombre;
                     document.getElementById('cliente-celular').value = data.telefono || '';
+                    document.getElementById('cliente-origen').value = data.origen || ''; 
                 } else {
                     alert('Cliente no encontrado. Puede registrarlo como nuevo.');
                     document.getElementById('cliente-nombre').value = '';
                     document.getElementById('cliente-celular').value = '';
+                    document.getElementById('cliente-origen').value = ''; 
                 }
             })
             .catch(error => {
@@ -198,39 +200,51 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     
     function abrirModalInfo(data) {
+        // Guardamos el ID para usarlo en otras funciones (ej. liberar habitación)
         modalInfoElement.dataset.ocupacionId = data.ocupacion.id;
+        
         const { habitacion, ocupacion } = data;
         const montoTotal = parseFloat(ocupacion.monto_total);
         
+        // --- MANEJO DE FECHA CORREGIDO Y UNIFICADO ---
+        
         let fechaFormateada = "No disponible";
+        let diaActual = 1;
+        
         if (ocupacion.fecha_inicio) {
-            const fechaParts = ocupacion.fecha_inicio.split('-');
-            const fechaInicio = new Date(fechaParts[0], fechaParts[1] - 1, fechaParts[2]);
+            // 1. Reemplazamos el espacio por 'T' para crear un formato ISO 8601 válido.
+            const fechaInicioISO = ocupacion.fecha_inicio.replace(' ', 'T');
+            const fechaInicio = new Date(fechaInicioISO);
+
+            // 2. Verificamos si la fecha es válida antes de hacer cualquier cosa.
             if (!isNaN(fechaInicio.getTime())) {
+                
+                // 3. Formateamos la fecha para mostrarla al usuario de forma amigable.
                 fechaFormateada = fechaInicio.toLocaleDateString('es-ES', {
                     day: 'numeric', month: 'long', year: 'numeric'
                 });
+
+                // 4. Calculamos el día actual de la estancia.
+                const hoy = new Date();
+                diaActual = Math.floor((hoy - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
+                if (diaActual > ocupacion.estadia_dias) diaActual = ocupacion.estadia_dias;
+                if (diaActual < 1) diaActual = 1;
             }
         }
         
-        let diaActual = 1;
-        const fechaInicioObj = new Date(ocupacion.fecha_inicio + 'T00:00:00');
-        if (!isNaN(fechaInicioObj.getTime())) {
-            const hoy = new Date();
-            diaActual = Math.floor((hoy - fechaInicioObj) / (1000 * 60 * 60 * 24)) + 1;
-            if (diaActual > ocupacion.estadia_dias) diaActual = ocupacion.estadia_dias;
-            if (diaActual < 1) diaActual = 1;
-        }
+        // --- FIN DEL MANEJO DE FECHA ---
 
+        // Función auxiliar para rellenar campos de forma segura
         const findAndFill = (selector, value) => {
             const el = modalInfoElement.querySelector(selector);
             if (el) el.textContent = value;
         };
         
+        // Llenado de todos los campos del modal
         findAndFill('#info-numero-hab', habitacion.numero_habitacion);
         findAndFill('#info-tipo-hab', habitacion.tipo_nombre);
-        findAndFill('#info-fecha-inicio', fechaFormateada);
-        findAndFill('#info-dia-actual', diaActual);
+        findAndFill('#info-fecha-inicio', fechaFormateada); // Usamos la fecha ya formateada
+        findAndFill('#info-dia-actual', diaActual);         // Usamos el día ya calculado
         findAndFill('#info-dias-totales', ocupacion.estadia_dias);
         findAndFill('#info-cliente-nombre', ocupacion.cliente_nombre);
         findAndFill('#info-cliente-dni', ocupacion.cliente_dni);
