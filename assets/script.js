@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const btnConfirmarRegistro = document.getElementById('btn-confirmar-registro');
     const btnConfirmarPago = document.getElementById('btn-confirmar-pago');
     const btnBuscarCliente = document.getElementById('btn-buscar-cliente');
+    const btnGuardarTaxi = document.getElementById('btn-guardar-taxi');
     const btnLiberarHabitacion = document.getElementById('btn-liberar-habitacion');
 
     // =================================================================
@@ -149,27 +150,50 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     
     function abrirModalPago(data) {
+        // Guardamos el ID de la ocupación en el modal para usarlo en otras funciones
         modalPagoElement.dataset.ocupacionId = data.ocupacion.id;
+
         const { habitacion, ocupacion, pago } = data;
         const montoPagado = parseFloat(pago.total_pagado) || 0;
         const montoTotal = parseFloat(ocupacion.monto_total);
         const saldo = montoTotal - montoPagado;
-        const fechaInicio = new Date(ocupacion.fecha_inicio + 'T00:00:00');
-        const hoy = new Date();
-        let diaActual = Math.floor((hoy - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
-        if (diaActual > ocupacion.estadia_dias) diaActual = ocupacion.estadia_dias;
-        if (diaActual < 1) diaActual = 1;
 
+        // --- CORRECCIÓN DEL BUG "Día NaN" ---
+        // La fecha de la BD viene como "YYYY-MM-DD HH:MM:SS".
+        // Reemplazar el espacio por una 'T' lo hace compatible con el formato ISO 8601 que JavaScript entiende bien.
+        const fechaInicio = new Date(ocupacion.fecha_inicio.replace(' ', 'T'));
+        
+        let diaActual = 1; // Valor por defecto si la fecha es inválida
+        // Comprobamos que la fecha se haya interpretado correctamente antes de hacer cálculos
+        if (!isNaN(fechaInicio.getTime())) { 
+            const hoy = new Date();
+            diaActual = Math.floor((hoy - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
+            if (diaActual > ocupacion.estadia_dias) diaActual = ocupacion.estadia_dias;
+            if (diaActual < 1) diaActual = 1;
+        }
+
+        // --- Llenado de los campos que ya tenías ---
         modalPagoElement.querySelector('#pago-numero-hab').textContent = habitacion.numero_habitacion;
         modalPagoElement.querySelector('#pago-tipo-hab').textContent = habitacion.tipo_nombre;
-        modalPagoElement.querySelector('#pago-dia-actual').textContent = diaActual;
+        modalPagoElement.querySelector('#pago-dia-actual').textContent = diaActual; // Usa el valor corregido
         modalPagoElement.querySelector('#pago-dias-totales').textContent = ocupacion.estadia_dias;
         modalPagoElement.querySelector('#pago-cliente-nombre').textContent = ocupacion.cliente_nombre;
         modalPagoElement.querySelector('#pago-cliente-dni').textContent = ocupacion.cliente_dni;
         modalPagoElement.querySelector('#pago-monto-total').textContent = montoTotal.toFixed(2);
         modalPagoElement.querySelector('#pago-monto-pagado').textContent = montoPagado.toFixed(2);
         modalPagoElement.querySelector('#pago-saldo-pendiente').textContent = saldo.toFixed(2);
+
+        // --- NUEVO: Llenado de los nuevos campos de Taxi y limpieza de campos de pago ---
+        // Rellenamos los campos del acordeón de "Editar Datos de Taxi"
+        modalPagoElement.querySelector('#pago-taxi-info').value = ocupacion.taxi_info || '';
+        modalPagoElement.querySelector('#pago-taxi-comision').value = ocupacion.taxi_comision || '0.00';
+        
+        // Limpiamos los campos del formulario de "Registrar Nuevo Pago"
         modalPagoElement.querySelector('#pago-monto').value = '';
+        modalPagoElement.querySelector('#pago-numero-comprobante').value = '';
+        modalPagoElement.querySelector('#pago-comprobante').value = ''; // Reseteamos el select de comprobante
+        
+        // --- Mostrar el modal ---
         modalPago.show();
     }
     
@@ -284,6 +308,7 @@ document.addEventListener('DOMContentLoaded', function () {
             monto_pagado: document.getElementById('pago-monto').value,
             metodo_pago: document.getElementById('pago-metodo').value,
             comprobante: document.getElementById('pago-comprobante').value,
+            numero_comprobante: document.getElementById('pago-numero-comprobante').value,
         };
 
         if (!dataToSend.monto_pagado || dataToSend.monto_pagado <= 0) {
@@ -306,6 +331,27 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         })
         .catch(error => alert('Error al registrar pago: ' + error.message));
+    });
+
+    btnGuardarTaxi.addEventListener('click', function() {
+        const ocupacionId = modalPagoElement.dataset.ocupacionId;
+        const data = {
+            ocupacion_id: ocupacionId,
+            taxi_info: document.getElementById('pago-taxi-info').value,
+            taxi_comision: document.getElementById('pago-taxi-comision').value,
+        };
+        fetch('api/update_taxi_info.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        .then(res => res.json())
+        .then(result => {
+            if (result.status === 'success') {
+                alert(result.message);
+            } else { throw new Error(result.message); }
+        })
+        .catch(error => alert('Error: ' + error.message));
     });
 
     // =================================================================

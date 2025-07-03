@@ -187,29 +187,87 @@ function render_habitacion($num, $data) {
     </div>
 </div>
 
-<!-- Modal 2: Registrar Pago (Habitación Ocupada - Amarillo) -->
+<!-- Modal 2: Registrar Pago (ACTUALIZADO CON EDICIÓN DE TAXI Y MÁS) -->
 <div class="modal fade" id="modalPago" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title">Registrar Pago - Habitación <span id="pago-numero-hab"></span></h5>
+                <h5 class="modal-title">Gestionar Ocupación - Habitación <span id="pago-numero-hab"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                <!-- Info de la Ocupación -->
                 <p class="mb-1"><strong>Tipo:</strong> <span id="pago-tipo-hab"></span></p>
                 <p><strong>Estancia:</strong> Día <span id="pago-dia-actual"></span> de <span id="pago-dias-totales"></span></p>
-                <div class="alert alert-info" id="pago-info-cliente"><strong>Cliente:</strong> <span id="pago-cliente-nombre"></span><br><strong>DNI:</strong> <span id="pago-cliente-dni"></span></div>
+                <div class="alert alert-info">
+                    <strong>Cliente:</strong> <span id="pago-cliente-nombre"></span><br>
+                    <strong>DNI:</strong> <span id="pago-cliente-dni"></span>
+                </div>
+
+                <!-- Acordeón para Editar Datos Adicionales -->
+                <div class="accordion" id="accordionAdicionales">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingOne">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAdicionales" aria-expanded="false" aria-controls="collapseAdicionales">
+                                Editar Datos de Taxi
+                            </button>
+                        </h2>
+                        <div id="collapseAdicionales" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#accordionAdicionales">
+                            <div class="accordion-body">
+                                <div class="row g-2">
+                                    <div class="col-md-7">
+                                        <label for="pago-taxi-info" class="form-label">Info Taxi</label>
+                                        <input type="text" id="pago-taxi-info" class="form-control form-control-sm">
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label for="pago-taxi-comision" class="form-label">Comisión (S/)</label>
+                                        <input type="number" id="pago-taxi-comision" class="form-control form-control-sm">
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-outline-primary mt-2" id="btn-guardar-taxi">Guardar Cambios de Taxi</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <hr>
+
+                <!-- Resumen Financiero -->
                 <div class="text-center mb-3">
                     <h5>Monto Total: S/ <span id="pago-monto-total"></span></h5>
                     <h6>Monto Pagado: S/ <span id="pago-monto-pagado"></span></h6>
                     <h5 class="text-danger">Saldo Pendiente: S/ <span id="pago-saldo-pendiente"></span></h5>
                 </div>
                 <hr>
-                 <h6><i class="fas fa-cash-register"></i> Registrar Nuevo Pago</h6>
+
+                <!-- Formulario de Nuevo Pago -->
+                <h6><i class="fas fa-cash-register"></i> Registrar Nuevo Pago</h6>
                  <div class="row g-3">
-                    <div class="col-md-12"><label for="pago-monto" class="form-label">Monto a Registrar (S/)</label><input type="number" class="form-control" id="pago-monto" step="0.50" placeholder="0.00"></div>
-                     <div class="col-md-6"><label for="pago-metodo" class="form-label">Método de Pago</label><select id="pago-metodo" class="form-select"><option selected>Efectivo</option><option>Yape/Plin</option><option>Tarjeta (OpenPay)</option></select></div>
-                    <div class="col-md-6"><label for="pago-comprobante" class="form-label">Comprobante</label><select id="pago-comprobante" class="form-select"><option selected>Boleta</option><option>Factura</option></select></div>
+                    <div class="col-md-12">
+                         <label for="pago-monto" class="form-label">Monto a Registrar (S/)</label>
+                         <input type="number" class="form-control" id="pago-monto" step="0.10" placeholder="0.00">
+                    </div>
+                    <!-- NUEVO: Campo para número de comprobante -->
+                    <div class="col-md-12">
+                        <label for="pago-numero-comprobante" class="form-label">N° de Boleta/Factura</label>
+                        <input type="text" class="form-control" id="pago-numero-comprobante">
+                    </div>
+                     <div class="col-md-6">
+                        <label for="pago-metodo" class="form-label">Método de Pago</label>
+                        <select id="pago-metodo" class="form-select">
+                            <option selected>Efectivo</option>
+                            <option>Yape</option>
+                            <option>Plin</option>
+                            <option>Tarjeta (OpenPay)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                         <label for="pago-comprobante" class="form-label">Comprobante</label>
+                        <select id="pago-comprobante" class="form-select">
+                            <option value="">(Solo al saldar deuda)</option>
+                            <option value="Boleta">Boleta</option>
+                            <option value="Factura">Factura</option>
+                        </select>
+                    </div>
                  </div>
             </div>
             <div class="modal-footer">
