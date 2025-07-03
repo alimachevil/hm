@@ -187,3 +187,12 @@
    .modal-header.bg-success .modal-title {
        color: white;
    }
+
+   /* Estilos para la impresión de reportes */
+@media print {
+    body { background-color: #fff; }
+    .sidebar, #periodo-selector, #reporte-header .btn { display: none !important; }
+    .content { width: 100% !important; padding: 0 !important; margin: 0 !important; }
+    .card { box-shadow: none !important; border: 1px solid #dee2e6 !important; page-break-inside: avoid; }
+    #reporteGrafico { max-height: 400px !important; }
+}
