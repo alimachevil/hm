@@ -6,7 +6,7 @@ require_once 'config/db_connect.php';
 //  MANEJO DE PETICIONES (ROUTER INTERNO)
 // ===================================================================
 
-// --- PARTE 1: MANEJO DE ACTUALIZACIÓN DE CLIENTE (Formulario POST) ---
+// --- MANEJO DE ACTUALIZACIÓN DE CLIENTE (Formulario POST) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_cliente') {
     $id = $_POST['id'];
     $nombre = $_POST['nombre'];
@@ -17,7 +17,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         try {
             $stmt = $pdo->prepare("UPDATE Clientes SET nombre = ?, telefono = ?, origen = ? WHERE id = ?");
             $stmt->execute([$nombre, $telefono, $origen, $id]);
-            // Redirigimos a la misma página para evitar reenvío de formulario y ver los cambios.
             header('Location: clientes.php?update=success');
             exit;
         } catch (Exception $e) {
@@ -27,27 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     }
 }
 
-
-// --- PARTE 2: MANEJO DE PETICIÓN DE HISTORIAL (Llamada AJAX) ---
+// --- MANEJO DE PETICIÓN DE HISTORIAL (Llamada AJAX) ---
 if (isset($_GET['action']) && $_GET['action'] === 'get_historial') {
     header('Content-Type: application/json');
     $cliente_id = $_GET['id'] ?? 0;
-
     try {
-        $stmt = $pdo->prepare("
-            SELECT 
-                o.fecha_inicio, o.estadia_dias, o.monto_total,
-                h.numero_habitacion, th.nombre AS tipo_habitacion,
-                (SELECT p.comprobante FROM Pagos p WHERE p.ocupacion_id = o.id AND p.comprobante IS NOT NULL ORDER BY p.fecha_pago DESC LIMIT 1) AS comprobante_tipo,
-                (SELECT p.numero_comprobante FROM Pagos p WHERE p.ocupacion_id = o.id AND p.numero_comprobante IS NOT NULL ORDER BY p.fecha_pago DESC LIMIT 1) AS comprobante_numero,
-                (SELECT p.metodo_pago FROM Pagos p WHERE p.ocupacion_id = o.id ORDER BY p.fecha_pago DESC LIMIT 1) AS ultimo_metodo_pago,
-                (SELECT SUM(p.monto_pagado) FROM Pagos p WHERE p.ocupacion_id = o.id) >= o.monto_total AS pagado_completo
-            FROM Ocupaciones o
-            JOIN Habitaciones h ON o.habitacion_id = h.numero_habitacion
-            JOIN Tipos_Habitaciones th ON h.tipo_id = th.id
-            WHERE o.cliente_id = ?
-            ORDER BY o.fecha_inicio DESC
-        ");
+        $stmt = $pdo->prepare("SELECT o.fecha_inicio, o.id as id_ocupacion, o.estadia_dias, o.monto_total, h.numero_habitacion, th.nombre AS tipo_habitacion, (SELECT p.comprobante FROM Pagos p WHERE p.ocupacion_id = o.id AND p.comprobante IS NOT NULL ORDER BY p.fecha_pago DESC LIMIT 1) AS comprobante_tipo, (SELECT p.numero_comprobante FROM Pagos p WHERE p.ocupacion_id = o.id AND p.numero_comprobante IS NOT NULL ORDER BY p.fecha_pago DESC LIMIT 1) AS comprobante_numero, (SELECT p.metodo_pago FROM Pagos p WHERE p.ocupacion_id = o.id ORDER BY p.fecha_pago DESC LIMIT 1) AS ultimo_metodo_pago, (SELECT SUM(p.monto_pagado) FROM Pagos p WHERE p.ocupacion_id = o.id) >= o.monto_total AS pagado_completo FROM Ocupaciones o JOIN Habitaciones h ON o.habitacion_id = h.numero_habitacion JOIN Tipos_Habitaciones th ON h.tipo_id = th.id WHERE o.cliente_id = ? ORDER BY o.fecha_inicio DESC");
         $stmt->execute([$cliente_id]);
         $historial = $stmt->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode($historial);
@@ -55,16 +39,13 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_historial') {
         http_response_code(500);
         echo json_encode(['error' => 'Error al obtener el historial.']);
     }
-    // Detenemos la ejecución para no renderizar el resto del HTML.
     exit;
 }
 
-
-// --- PARTE 3: LÓGICA PARA LA CARGA NORMAL DE LA PÁGINA (GET) ---
+// --- LÓGICA PARA LA CARGA NORMAL DE LA PÁGINA (GET) ---
 $page_title = "Gestión de Clientes"; 
 require_once 'templates/header.php'; 
 
-// Obtenemos la lista de clientes para mostrar en la tabla.
 $stmt = $pdo->query("SELECT id, documento_identidad, nombre, telefono, origen FROM Clientes ORDER BY nombre ASC");
 $clientes = $stmt->fetchAll();
 ?>
@@ -77,7 +58,13 @@ $clientes = $stmt->fetchAll();
 
     <!-- Área de la Lista de Clientes -->
     <div class="card">
-        <div class="card-header"><i class="fas fa-users"></i> Lista de Clientes Registrados</div>
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="fas fa-users"></i> Lista de Clientes Registrados</span>
+            <!-- ========== NUEVO CAMPO DE BÚSQUEDA ========== -->
+            <div class="w-50">
+                <input type="text" id="filtro-cliente" class="form-control" placeholder="Buscar cliente por nombre...">
+            </div>
+        </div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-hover table-striped">
@@ -91,27 +78,34 @@ $clientes = $stmt->fetchAll();
                         </tr>
                     </thead>
                     <tbody id="tabla-clientes">
-                        <?php foreach ($clientes as $cliente): ?>
-                            <tr style="cursor: pointer;" data-cliente-id="<?php echo $cliente['id']; ?>" title="Haz clic para ver el historial">
-                                <td><?php echo htmlspecialchars($cliente['documento_identidad']); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['nombre']); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['telefono'] ?? 'N/A'); ?></td>
-                                <td><?php echo htmlspecialchars($cliente['origen'] ?? 'N/A'); ?></td>
-                                <td class="text-end">
-                                    <button class="btn btn-sm btn-primary btn-edit" 
-                                            data-id="<?php echo $cliente['id']; ?>"
-                                            data-dni="<?php echo htmlspecialchars($cliente['documento_identidad']); ?>"
-                                            data-nombre="<?php echo htmlspecialchars($cliente['nombre']); ?>"
-                                            data-telefono="<?php echo htmlspecialchars($cliente['telefono'] ?? ''); ?>"
-                                            data-origen="<?php echo htmlspecialchars($cliente['origen'] ?? ''); ?>"
-                                            title="Editar Cliente">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
+                        <?php if (empty($clientes)): ?>
+                            <tr><td colspan="5" class="text-center text-muted">No hay clientes registrados.</td></tr>
+                        <?php else: ?>
+                            <?php foreach ($clientes as $cliente): ?>
+                                <!-- Se añade data-nombre para la búsqueda en JS -->
+                                <tr style="cursor: pointer;" data-cliente-id="<?php echo $cliente['id']; ?>" data-nombre-cliente="<?php echo strtolower(htmlspecialchars($cliente['nombre'])); ?>" title="Haz clic para ver el historial">
+                                    <td><?php echo htmlspecialchars($cliente['documento_identidad']); ?></td>
+                                    <td><?php echo htmlspecialchars($cliente['nombre']); ?></td>
+                                    <td><?php echo htmlspecialchars($cliente['telefono'] ?? 'N/A'); ?></td>
+                                    <td><?php echo htmlspecialchars($cliente['origen'] ?? 'N/A'); ?></td>
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-primary btn-edit" 
+                                                data-id="<?php echo $cliente['id']; ?>"
+                                                data-dni="<?php echo htmlspecialchars($cliente['documento_identidad']); ?>"
+                                                data-nombre="<?php echo htmlspecialchars($cliente['nombre']); ?>"
+                                                data-telefono="<?php echo htmlspecialchars($cliente['telefono'] ?? ''); ?>"
+                                                data-origen="<?php echo htmlspecialchars($cliente['origen'] ?? ''); ?>"
+                                                title="Editar Cliente">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                     </tbody>
                 </table>
+                 <!-- Mensaje si no hay resultados de búsqueda -->
+                 <p id="mensaje-no-resultados" class="text-center text-muted mt-3" style="display: none;">No se encontraron clientes con ese nombre.</p>
             </div>
         </div>
     </div>
@@ -174,6 +168,38 @@ document.addEventListener('DOMContentLoaded', function () {
     const historialContainer = document.getElementById('historial-cliente-container');
     const historialContenido = document.getElementById('historial-contenido');
 
+    // ========== NUEVA LÓGICA DE BÚSQUEDA ==========
+    const filtroInput = document.getElementById('filtro-cliente');
+    const filasClientes = tablaClientes.querySelectorAll('tr');
+    const mensajeNoResultados = document.getElementById('mensaje-no-resultados');
+
+    if (filtroInput) {
+        filtroInput.addEventListener('input', function() {
+            const filtroTexto = this.value.toLowerCase().trim();
+            let resultadosVisibles = 0;
+
+            filasClientes.forEach(fila => {
+                // Obtenemos el nombre del cliente del data-attribute que añadimos
+                const nombreCliente = fila.dataset.nombreCliente || '';
+                
+                // Comparamos si el nombre del cliente incluye el texto del filtro
+                if (nombreCliente.includes(filtroTexto)) {
+                    fila.style.display = ''; // Muestra la fila
+                    resultadosVisibles++;
+                } else {
+                    fila.style.display = 'none'; // Oculta la fila
+                }
+            });
+
+            // Mostramos un mensaje si no hay resultados
+            if (resultadosVisibles === 0) {
+                mensajeNoResultados.style.display = 'block';
+            } else {
+                mensajeNoResultados.style.display = 'none';
+            }
+        });
+    }
+    
     // Lógica para rellenar el modal y mostrar el historial
     tablaClientes.addEventListener('click', function (e) {
         const editButton = e.target.closest('.btn-edit');
