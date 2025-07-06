@@ -50,13 +50,100 @@ while ($row = $stmt->fetch()) {
     $habitaciones[$row['numero_habitacion']] = $row;
 }
 
-// Función auxiliar para imprimir el HTML de una habitación.
-function render_habitacion($num, $data) {
-    if (!isset($data[$num])) return;
+function render_habitacion($num, $data, $tipos) {
+    // 1. Verificamos que la habitación exista en los datos.
+    if (!isset($data[$num])) {
+        return;
+    }
+    
+    // 2. Asignamos los datos a una variable más corta.
     $hab = $data[$num];
-    echo "<div class='habitacion {$hab['estado']}' data-numero='{$hab['numero_habitacion']}'>{$hab['numero_habitacion']}</div>";
+    
+    // 3. Obtenemos la inicial del tipo desde nuestro array estático.
+    $tipo_inicial = $tipos[$num] ?? '?';
+    
+    // 4. Limpiamos el número de habitación.
+    $numero_limpio = htmlspecialchars(trim($hab['numero_habitacion']));
+    
+    // 5. Generamos el HTML:
+    //    - El contenedor principal SIGUE SIENDO el <div class='habitacion'>.
+    //    - El 'data-numero' se mantiene para que tu JavaScript lo encuentre.
+    //    - Dentro, añadimos los nuevos elementos visuales.
+    echo "
+        <div class='habitacion {$hab['estado']}' data-numero='{$numero_limpio}'>
+            <div class='tipo-indicador'>{$tipo_inicial}</div>
+            <span class='numero-habitacion'>{$numero_limpio}</span>
+            <div class='status-bar'></div>
+        </div>
+    ";
 }
+
+$tipos_habitacion = [
+    '102'=>'M', '103'=>'S', '104'=>'C', '105'=>'T',
+    '201'=>'M', '202'=>'M', '203'=>'M', '204'=>'S', '205'=>'C', '206'=>'T', '207'=>'M', '208'=>'M', '209'=>'M', '210'=>'M', '211'=>'D', '212'=>'T', '213'=>'M',
+    '301'=>'M', '302'=>'M', '303'=>'M', '304'=>'S', '305'=>'C', '306'=>'T', '307'=>'M', '308'=>'M', '309'=>'M', '310'=>'M', '311'=>'D', '312'=>'T', '313'=>'M',
+    '401'=>'M', '402'=>'M', '403'=>'M', '404'=>'S', '405'=>'C', '406'=>'T', '407'=>'M', '408'=>'M', '409'=>'M', '410'=>'M', '411'=>'D', '412'=>'T', '413'=>'M',
+    '501'=>'T', '502'=>'M', '503'=>'M', '504'=>'S', '505'=>'C', '506'=>'T', '507'=>'M', '508'=>'M', '509'=>'M', '510'=>'M', '511'=>'D', '512'=>'T', '513'=>'M',
+    '601'=>'C', '602'=>'C', '603'=>'T', '604'=>'C', '605'=>'T'
+];
 ?>
+
+<style>
+:root {
+    --primary-color: #4A55A2;
+    --background-color: #F0F2F5;
+    --success-color: #22c55e;
+    --warning-color: #f59e0b;
+    --text-color: #334155;
+    --font-heading: 'Poppins', sans-serif;
+}
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.piso-columna {
+    display: flex; flex-direction: column; gap: 1rem;
+    opacity: 0; animation: fadeInUp 0.6s ease-out forwards;
+    animation-delay: var(--delay);
+}
+.pisos-container {
+    display: flex; flex-wrap: wrap; gap: 2.5rem;
+    justify-content: center; padding: 1.5rem 0;
+}
+.habitacion-link { text-decoration: none; }
+.habitacion {
+    width: 110px; height: 140px; border-radius: 12px; position: relative;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    background-color: #fff; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    border: 1px solid #e2e8f0; transition: all 0.3s ease; overflow: hidden;
+}
+.habitacion-link:hover .habitacion {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.07);
+}
+.numero-habitacion {
+    font-family: var(--font-heading); font-size: 2.5rem; font-weight: 700;
+    color: var(--text-color); line-height: 1;
+}
+.tipo-indicador {
+    position: absolute; top: 8px; right: 8px; width: 28px; height: 28px;
+    background-color: rgba(0, 0, 0, 0.05); border-radius: 50%;
+    display: flex; justify-content: center; align-items: center;
+    font-weight: 600; font-size: 0.9rem; color: var(--text-color);
+}
+.status-bar {
+    position: absolute; bottom: 0; left: 0; width: 100%; height: 8px;
+    transition: height 0.3s ease;
+}
+.habitacion-link:hover .status-bar { height: 12px; }
+.habitacion.disponible .status-bar { background-color: var(--primary-color); }
+.habitacion.pago-pendiente .status-bar { background-color: var(--warning-color); }
+.habitacion.pagada .status-bar { background-color: var(--success-color); }
+.leyenda { width: 15px; height: 15px; border-radius: 4px; }
+.leyenda.disponible { background-color: var(--primary-color); }
+.leyenda.pago-pendiente { background-color: var(--warning-color); }
+.leyenda.pagada { background-color: var(--success-color); }
+</style>
 
 <!-- ==================================================== -->
 <!--           CONTENIDO PRINCIPAL (EL RELLENO)           -->
@@ -71,35 +158,14 @@ function render_habitacion($num, $data) {
     </div>
 
     <div class="pisos-container">
-        <!-- Columna 1 -->
-        <div class="piso-columna">
-            <div class="grupo-habitaciones"><?php foreach (['102', '103', '104', '105'] as $num) render_habitacion($num, $habitaciones); ?></div>
-        </div>
-        <!-- Columna 2 -->
-        <div class="piso-columna">
-            <div class="grupo-habitaciones"><?php foreach (['201', '202', '203', '204', '205', '206'] as $num) render_habitacion($num, $habitaciones); ?></div>
-            <div class="grupo-habitaciones mt-3"><?php foreach (['207', '208', '209', '210', '211', '212', '213'] as $num) render_habitacion($num, $habitaciones); ?></div>
-        </div>
-        <!-- Columna 3 -->
-        <div class="piso-columna">
-            <div class="grupo-habitaciones"><?php foreach (['301', '302', '303', '304', '305', '306'] as $num) render_habitacion($num, $habitaciones); ?></div>
-            <div class="grupo-habitaciones mt-3"><?php foreach (['307', '308', '309', '310', '311', '312', '313'] as $num) render_habitacion($num, $habitaciones); ?></div>
-        </div>
-        <!-- Columna 4 -->
-        <div class="piso-columna">
-            <div class="grupo-habitaciones"><?php foreach (['401', '402', '403', '404', '405', '406'] as $num) render_habitacion($num, $habitaciones); ?></div>
-            <div class="grupo-habitaciones mt-3"><?php foreach (['407', '408', '409', '410', '411', '412', '413'] as $num) render_habitacion($num, $habitaciones); ?></div>
-        </div>
-        <!-- Columna 5 -->
-        <div class="piso-columna">
-             <div class="grupo-habitaciones"><?php foreach (['501', '502', '503', '504', '505', '506'] as $num) render_habitacion($num, $habitaciones); ?></div>
-            <div class="grupo-habitaciones mt-3"><?php foreach (['507', '508', '509', '510', '511', '512', '513'] as $num) render_habitacion($num, $habitaciones); ?></div>
-        </div>
-        <!-- Columna 6 -->
-        <div class="piso-columna">
-            <div class="grupo-habitaciones"><?php foreach (['601', '602', '603', '604', '605'] as $num) render_habitacion($num, $habitaciones); ?></div>
-        </div>
-    </div>
+    <!-- Se añade el array $tipos_habitacion como tercer parámetro en cada llamada -->
+    <div class="piso-columna" style="--delay: 0s;"><?php foreach (['102', '103', '104', '105'] as $num) render_habitacion($num, $habitaciones, $tipos_habitacion); ?></div>
+    <div class="piso-columna" style="--delay: 0.1s;"><?php foreach (['201', '202', '203', '204', '205', '206'] as $num) render_habitacion($num, $habitaciones, $tipos_habitacion); ?><div class="grupo-habitaciones mt-3"><?php foreach (['207', '208', '209', '210', '211', '212', '213'] as $num) render_habitacion($num, $habitaciones, $tipos_habitacion); ?></div></div>
+    <div class="piso-columna" style="--delay: 0.2s;"><?php foreach (['301', '302', '303', '304', '305', '306'] as $num) render_habitacion($num, $habitaciones, $tipos_habitacion); ?><div class="grupo-habitaciones mt-3"><?php foreach (['307', '308', '309', '310', '311', '312', '313'] as $num) render_habitacion($num, $habitaciones, $tipos_habitacion); ?></div></div>
+    <div class="piso-columna" style="--delay: 0.3s;"><?php foreach (['401', '402', '403', '404', '405', '406'] as $num) render_habitacion($num, $habitaciones, $tipos_habitacion); ?><div class="grupo-habitaciones mt-3"><?php foreach (['407', '408', '409', '410', '411', '412', '413'] as $num) render_habitacion($num, $habitaciones, $tipos_habitacion); ?></div></div>
+    <div class="piso-columna" style="--delay: 0.4s;"><?php foreach (['501', '502', '503', '504', '505', '506'] as $num) render_habitacion($num, $habitaciones, $tipos_habitacion); ?><div class="grupo-habitaciones mt-3"><?php foreach (['507', '508', '509', '510', '511', '512', '513'] as $num) render_habitacion($num, $habitaciones, $tipos_habitacion); ?></div></div>
+    <div class="piso-columna" style="--delay: 0.5s;"><?php foreach (['601', '602', '603', '604', '605'] as $num) render_habitacion($num, $habitaciones, $tipos_habitacion); ?></div>
+</div>
 </main>
 
 <!-- ==================================================== -->
