@@ -76,6 +76,16 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_report_data') {
         ");
         $response['conteo_taxis'] = $stmt_taxis->fetchAll(PDO::FETCH_ASSOC);
         
+        // ========== NUEVA CONSULTA PARA EL REPORTE DE ORIGEN ==========
+        $stmt_top_origenes = $pdo->query("
+            SELECT c.origen, COUNT(DISTINCT o.cliente_id) as total_clientes
+            FROM Ocupaciones o
+            JOIN Clientes c ON o.cliente_id = c.id
+            $condition_ocupaciones AND c.origen IS NOT NULL AND c.origen != ''
+            GROUP BY c.origen ORDER BY total_clientes DESC LIMIT 5
+        ");
+        $response['top_origenes'] = $stmt_top_origenes->fetchAll(PDO::FETCH_ASSOC);
+        
         echo json_encode($response);
 
     } catch (Exception $e) {
@@ -166,6 +176,21 @@ require_once 'templates/header.php';
             </div>
         </div>
     </div>
+
+    <!-- NUEVO: Reporte de Origen de Clientes -->
+    <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header py-3"><h6 class="m-0 fw-bold text-primary">Top Origen de Clientes</h6></div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered mb-0">
+                            <thead><tr><th>País / Ciudad</th><th class="text-center">N° de Clientes</th></tr></thead>
+                            <tbody id="tabla-reporte-origenes"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
 </main>
 
 <!-- Incluimos la librería Chart.js y el script embebido -->
@@ -178,6 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const listaTopHabitaciones = document.getElementById('lista-top-habitaciones');
     const listaTopProductos = document.getElementById('lista-top-productos');
     const tablaReporteTaxis = document.getElementById('tabla-reporte-taxis');
+    const tablaReporteOrigenes = document.getElementById('tabla-reporte-origenes'); // NUEVO ELEMENTO
     const btnImprimir = document.getElementById('btn-imprimir-reporte');
     const canvas = document.getElementById('reporteGrafico');
     const ctx = canvas.getContext('2d');
@@ -202,12 +228,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // --- FUNCIÓN PRINCIPAL PARA OBTENER Y MOSTRAR DATOS ---
     function cargarReporte(periodo = 'diario') {
+        // Mostrar estado de carga para todos los elementos, incluyendo el nuevo
         kpiContainer.innerHTML = '<div class="col-12 text-center py-5"><i class="fas fa-spinner fa-spin fa-3x text-primary"></i></div>';
         listaTopHabitaciones.innerHTML = '<li class="list-group-item text-center">Cargando...</li>';
         listaTopProductos.innerHTML = '<li class="list-group-item text-center">Cargando...</li>';
         tablaReporteTaxis.innerHTML = '<tr><td colspan="2" class="text-center">Cargando...</td></tr>';
+        tablaReporteOrigenes.innerHTML = '<tr><td colspan="2" class="text-center">Cargando...</td></tr>'; // NUEVO
         
-        // La llamada fetch ahora apunta a este mismo archivo
+        // La llamada fetch apunta a este mismo archivo
         fetch(`reportes.php?action=get_report_data&periodo=${periodo}`)
             .then(response => {
                 if (!response.ok) throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
@@ -229,19 +257,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 reporteGrafico.data.datasets[0].data = data.chart_data.data;
                 reporteGrafico.update();
 
-                // Actualizar listas
+                // Actualizar listas y tablas
                 actualizarLista(listaTopHabitaciones, data.top_habitaciones, item => `<span><i class="fas fa-door-open text-secondary me-2"></i> Hab. <strong>${item.habitacion_id}</strong></span><span class="badge bg-primary rounded-pill">${item.total_veces}</span>`);
                 actualizarLista(listaTopProductos, data.top_productos, item => `<span><i class="fas fa-shopping-basket text-secondary me-2"></i> ${item.nombre}</span><span class="badge bg-primary rounded-pill">${item.total_vendido}</span>`);
+                actualizarTabla(tablaReporteTaxis, data.conteo_taxis, taxi => `<tr><td>${taxi.taxi_info}</td><td class="text-center">${taxi.total_viajes}</td></tr>`);
                 
-                // Actualizar tabla de taxis
-                tablaReporteTaxis.innerHTML = '';
-                if(data.conteo_taxis && data.conteo_taxis.length > 0) {
-                    data.conteo_taxis.forEach(taxi => {
-                        tablaReporteTaxis.innerHTML += `<tr><td>${taxi.taxi_info}</td><td class="text-center">${taxi.total_viajes}</td></tr>`;
-                    });
-                } else {
-                    tablaReporteTaxis.innerHTML = '<tr><td colspan="2" class="text-center text-muted">No se registraron taxis en este período.</td></tr>';
-                }
+                // NUEVO: Actualizar la nueva tabla de orígenes
+                actualizarTabla(tablaReporteOrigenes, data.top_origenes, origen => `<tr><td>${origen.origen}</td><td class="text-center">${origen.total_clientes}</td></tr>`);
+
             })
             .catch(error => {
                 console.error("Error al cargar el reporte:", error);
@@ -249,6 +272,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    // --- FUNCIONES AUXILIARES ---
     function actualizarLista(ulElement, data, formatter) {
         ulElement.innerHTML = '';
         if (data && data.length > 0) {
@@ -260,6 +284,19 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         } else {
             ulElement.innerHTML = '<li class="list-group-item text-muted">No hay datos para mostrar.</li>';
+        }
+    }
+
+    // Función genérica para actualizar cuerpos de tablas
+    function actualizarTabla(tbodyElement, data, formatter) {
+        tbodyElement.innerHTML = '';
+        if (data && data.length > 0) {
+            data.forEach(item => {
+                tbodyElement.innerHTML += formatter(item);
+            });
+        } else {
+            const colspan = tbodyElement.previousElementSibling.firstElementChild.childElementCount;
+            tbodyElement.innerHTML = `<tr><td colspan="${colspan}" class="text-center text-muted">No hay datos para mostrar.</td></tr>`;
         }
     }
 
