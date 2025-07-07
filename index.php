@@ -3,6 +3,7 @@
 $page_title = "Habitaciones"; 
 
 // 2. Incluimos el "pan de arriba": el doctype, head, CSS, y el sidebar.
+require_once 'config/auth_check.php';
 require_once 'templates/header.php'; 
 
 // 3. Lógica PHP específica para esta página: obtener y procesar las habitaciones.

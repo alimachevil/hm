@@ -44,6 +44,12 @@
             <li>
                 <a href="productos.php"><i class="fas fa-box-open"></i> <span>Productos</span></a>
             </li>
+            <li class="mt-auto"> <!-- mt-auto lo empuja hacia abajo -->
+                <a href="logout.php" class="text-danger">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Cerrar Sesión</span>
+                </a>
+            </li>
         </ul>
         <div class="sidebar-toggler-wrapper">
              <button type="button" id="sidebarCollapse" class="btn btn-light">

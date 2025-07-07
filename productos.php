@@ -1,6 +1,7 @@
 <?php
 // Incluimos la conexión a la base de datos una sola vez.
 require_once 'config/db_connect.php';
+require_once 'config/auth_check.php';
 
 // ===================================================================
 //  PROCESAMIENTO DEL FORMULARIO DE NUEVO PRODUCTO

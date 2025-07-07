@@ -1,6 +1,7 @@
 <?php
 // Incluimos la conexión a la base de datos una sola vez al principio.
 require_once 'config/db_connect.php';
+require_once 'config/auth_check.php';
 
 // ===================================================================
 //  MANEJO DE PETICIONES (ROUTER INTERNO)

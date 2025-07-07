@@ -1,20 +1,27 @@
 <?php
 // Incluimos la conexión a la base de datos una sola vez.
 require_once 'config/db_connect.php';
-
+require_once 'config/auth_check.php';
 // ===================================================================
 //  MANEJO DE LA PETICIÓN AJAX PARA OBTENER DATOS DEL REPORTE
 // ===================================================================
-// Este bloque solo se ejecuta si la página es llamada con los parámetros GET correctos.
+// Este bloque solo se ejecuta si la página es llamada con el parámetro GET 'action'.
 if (isset($_GET['action']) && $_GET['action'] === 'get_report_data') {
     header('Content-Type: application/json');
     
+    // Obtenemos el período solicitado, por defecto será 'diario'.
     $periodo = $_GET['periodo'] ?? 'diario';
+
     $condition_ocupaciones = "";
     $condition_ventas = "";
 
-    // Definimos los rangos de fechas de forma segura
+    // Definimos los rangos de fechas para las consultas SQL.
     switch ($periodo) {
+        case 'anual': // NUEVA OPCIÓN
+            // Filtra por el año actual.
+            $condition_ocupaciones = "WHERE YEAR(o.fecha_inicio) = YEAR(CURDATE())";
+            $condition_ventas = "WHERE YEAR(v.fecha_venta) = YEAR(CURDATE())";
+            break;
         case 'semanal':
             $condition_ocupaciones = "WHERE o.fecha_inicio >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY) AND o.fecha_inicio < CURDATE() + INTERVAL 1 DAY";
             $condition_ventas = "WHERE v.fecha_venta >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY) AND v.fecha_venta < CURDATE() + INTERVAL 1 DAY";
@@ -23,8 +30,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_report_data') {
             $condition_ocupaciones = "WHERE o.fecha_inicio >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND o.fecha_inicio < CURDATE() + INTERVAL 1 DAY";
             $condition_ventas = "WHERE v.fecha_venta >= DATE_FORMAT(CURDATE(), '%Y-%m-01') AND v.fecha_venta < CURDATE() + INTERVAL 1 DAY";
             break;
-        case 'diario':
-        default:
+        default: // 'diario'
             $condition_ocupaciones = "WHERE DATE(o.fecha_inicio) = CURDATE()";
             $condition_ventas = "WHERE DATE(v.fecha_venta) = CURDATE()";
             break;
@@ -33,7 +39,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_report_data') {
     try {
         $response = [];
 
-        // --- KPIs ---
+        // --- 1. KPIs ---
         $stmt_ing_ocu = $pdo->query("SELECT SUM(o.monto_total) FROM Ocupaciones o $condition_ocupaciones");
         $ingresos_ocupaciones = $stmt_ing_ocu->fetchColumn() ?: 0;
         $stmt_ing_ven = $pdo->query("SELECT SUM(v.monto_total) FROM Ventas v $condition_ventas");
@@ -49,41 +55,28 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_report_data') {
         $stmt_clientes = $pdo->query("SELECT COUNT(DISTINCT o.cliente_id) FROM Ocupaciones o $condition_ocupaciones");
         $response['kpis']['clientes_atendidos'] = $stmt_clientes->fetchColumn() ?: 0;
         
-        // --- Gráfico ---
+        // --- 2. Gráfico ---
+        // Para el reporte anual, agruparemos por mes. Para los demás, por día.
+        $group_by_format = ($periodo === 'anual') ? "'%m/%Y'" : "'%d/%m'";
         $chart_data = ['labels' => [], 'data' => []];
-        $stmt_chart = $pdo->query("SELECT DATE_FORMAT(o.fecha_inicio, '%d/%m') as dia, SUM(o.monto_total) as total_dia FROM Ocupaciones o $condition_ocupaciones GROUP BY dia ORDER BY o.fecha_inicio ASC");
+        $stmt_chart = $pdo->query("SELECT DATE_FORMAT(o.fecha_inicio, $group_by_format) as dia_o_mes, SUM(o.monto_total) as total_periodo FROM Ocupaciones o $condition_ocupaciones GROUP BY dia_o_mes ORDER BY o.fecha_inicio ASC");
         while($row = $stmt_chart->fetch(PDO::FETCH_ASSOC)){
-            $chart_data['labels'][] = $row['dia'];
-            $chart_data['data'][] = floatval($row['total_dia']);
+            $chart_data['labels'][] = $row['dia_o_mes'];
+            $chart_data['data'][] = floatval($row['total_periodo']);
         }
         $response['chart_data'] = $chart_data;
         
-        // --- Listas ---
+        // --- 3. Listas ---
         $stmt_top_rooms = $pdo->query("SELECT o.habitacion_id, COUNT(o.id) as total_veces FROM Ocupaciones o $condition_ocupaciones GROUP BY o.habitacion_id ORDER BY total_veces DESC LIMIT 5");
         $response['top_habitaciones'] = $stmt_top_rooms->fetchAll(PDO::FETCH_ASSOC);
 
         $stmt_top_prods = $pdo->query("SELECT p.nombre, SUM(vd.cantidad_vendida) as total_vendido FROM Venta_Detalles vd JOIN Productos p ON vd.producto_id = p.id JOIN Ventas v ON vd.venta_id = v.id $condition_ventas GROUP BY p.nombre ORDER BY total_vendido DESC LIMIT 5");
         $response['top_productos'] = $stmt_top_prods->fetchAll(PDO::FETCH_ASSOC);
         
-        // ========== LA CORRECCIÓN ESTÁ AQUÍ ==========
-        // Unimos el filtro de período con el filtro de taxi usando AND
-        $stmt_taxis = $pdo->query("
-            SELECT o.taxi_info, COUNT(o.id) as total_viajes 
-            FROM Ocupaciones o 
-            $condition_ocupaciones AND o.taxi_info IS NOT NULL AND o.taxi_info != '' 
-            GROUP BY o.taxi_info 
-            ORDER BY total_viajes DESC
-        ");
+        $stmt_taxis = $pdo->query("SELECT o.taxi_info, COUNT(o.id) as total_viajes FROM Ocupaciones o $condition_ocupaciones AND o.taxi_info IS NOT NULL AND o.taxi_info != '' GROUP BY o.taxi_info ORDER BY total_viajes DESC");
         $response['conteo_taxis'] = $stmt_taxis->fetchAll(PDO::FETCH_ASSOC);
-        
-        // ========== NUEVA CONSULTA PARA EL REPORTE DE ORIGEN ==========
-        $stmt_top_origenes = $pdo->query("
-            SELECT c.origen, COUNT(DISTINCT o.cliente_id) as total_clientes
-            FROM Ocupaciones o
-            JOIN Clientes c ON o.cliente_id = c.id
-            $condition_ocupaciones AND c.origen IS NOT NULL AND c.origen != ''
-            GROUP BY c.origen ORDER BY total_clientes DESC LIMIT 5
-        ");
+
+        $stmt_top_origenes = $pdo->query("SELECT c.origen, COUNT(DISTINCT o.cliente_id) as total_clientes FROM Ocupaciones o JOIN Clientes c ON o.cliente_id = c.id $condition_ocupaciones AND c.origen IS NOT NULL AND c.origen != '' GROUP BY c.origen ORDER BY total_clientes DESC LIMIT 5");
         $response['top_origenes'] = $stmt_top_origenes->fetchAll(PDO::FETCH_ASSOC);
         
         echo json_encode($response);
@@ -92,11 +85,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'get_report_data') {
         http_response_code(500);
         echo json_encode(['error' => 'Error en el servidor: ' . $e->getMessage()]);
     }
-    // Detenemos la ejecución aquí para que solo devuelva el JSON.
     exit;
 }
 // ===================================================================
-
 
 // --- Lógica para la carga normal de la página (HTML) ---
 $page_title = "Reportes y Estadísticas"; 
@@ -122,11 +113,13 @@ require_once 'templates/header.php';
         <button class="btn btn-outline-secondary" id="btn-imprimir-reporte"><i class="fas fa-print"></i> Imprimir / Guardar PDF</button>
     </div>
 
-    <!-- Selector de Período -->
+    <!-- Selector de Período (ACTUALIZADO) -->
     <div class="btn-group mb-4" role="group" id="periodo-selector">
         <button type="button" class="btn btn-primary active" data-periodo="diario">Diario</button>
         <button type="button" class="btn btn-primary" data-periodo="semanal">Semanal</button>
         <button type="button" class="btn btn-primary" data-periodo="mensual">Mensual</button>
+        <!-- ========== BOTÓN NUEVO AQUÍ ========== -->
+        <button type="button" class="btn btn-primary" data-periodo="anual">Anual</button>
     </div>
 
     <!-- Indicadores Clave de Rendimiento (KPIs) -->
@@ -203,7 +196,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const listaTopHabitaciones = document.getElementById('lista-top-habitaciones');
     const listaTopProductos = document.getElementById('lista-top-productos');
     const tablaReporteTaxis = document.getElementById('tabla-reporte-taxis');
-    const tablaReporteOrigenes = document.getElementById('tabla-reporte-origenes'); // NUEVO ELEMENTO
+    const tablaReporteOrigenes = document.getElementById('tabla-reporte-origenes');
     const btnImprimir = document.getElementById('btn-imprimir-reporte');
     const canvas = document.getElementById('reporteGrafico');
     const ctx = canvas.getContext('2d');
@@ -228,14 +221,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // --- FUNCIÓN PRINCIPAL PARA OBTENER Y MOSTRAR DATOS ---
     function cargarReporte(periodo = 'diario') {
-        // Mostrar estado de carga para todos los elementos, incluyendo el nuevo
+        // Muestra estado de carga para todos los elementos
         kpiContainer.innerHTML = '<div class="col-12 text-center py-5"><i class="fas fa-spinner fa-spin fa-3x text-primary"></i></div>';
         listaTopHabitaciones.innerHTML = '<li class="list-group-item text-center">Cargando...</li>';
         listaTopProductos.innerHTML = '<li class="list-group-item text-center">Cargando...</li>';
         tablaReporteTaxis.innerHTML = '<tr><td colspan="2" class="text-center">Cargando...</td></tr>';
-        tablaReporteOrigenes.innerHTML = '<tr><td colspan="2" class="text-center">Cargando...</td></tr>'; // NUEVO
+        tablaReporteOrigenes.innerHTML = '<tr><td colspan="2" class="text-center">Cargando...</td></tr>';
         
-        // La llamada fetch apunta a este mismo archivo
+        // La llamada fetch ahora apunta a este mismo archivo
         fetch(`reportes.php?action=get_report_data&periodo=${periodo}`)
             .then(response => {
                 if (!response.ok) throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
@@ -261,8 +254,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 actualizarLista(listaTopHabitaciones, data.top_habitaciones, item => `<span><i class="fas fa-door-open text-secondary me-2"></i> Hab. <strong>${item.habitacion_id}</strong></span><span class="badge bg-primary rounded-pill">${item.total_veces}</span>`);
                 actualizarLista(listaTopProductos, data.top_productos, item => `<span><i class="fas fa-shopping-basket text-secondary me-2"></i> ${item.nombre}</span><span class="badge bg-primary rounded-pill">${item.total_vendido}</span>`);
                 actualizarTabla(tablaReporteTaxis, data.conteo_taxis, taxi => `<tr><td>${taxi.taxi_info}</td><td class="text-center">${taxi.total_viajes}</td></tr>`);
-                
-                // NUEVO: Actualizar la nueva tabla de orígenes
                 actualizarTabla(tablaReporteOrigenes, data.top_origenes, origen => `<tr><td>${origen.origen}</td><td class="text-center">${origen.total_clientes}</td></tr>`);
 
             })
@@ -287,7 +278,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Función genérica para actualizar cuerpos de tablas
     function actualizarTabla(tbodyElement, data, formatter) {
         tbodyElement.innerHTML = '';
         if (data && data.length > 0) {
