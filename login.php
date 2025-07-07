@@ -59,7 +59,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             justify-content: center;
             height: 100vh;
             margin: 0;
-            background: linear-gradient(-45deg, #4A55A2, #7895CB, #A0BFE0, #C5DFF8);
+            background: linear-gradient(-45deg, 
+            #FFD3A5,   /* sunset peach */
+            #FD6585,   /* pink/coral */
+            #6A0572,   /* dusk violet */
+            #0D1B2A,   /* deep night blue */
+            #1B263B,   /* night/dark slate */
+            #415A77,   /* early dawn */
+            #778DA9,   /* soft blue morning */
+            #E0E1DD    /* pale light of dawn */
+            );
             background-size: 400% 400%;
             animation: gradient-animation 15s ease infinite;
         }
